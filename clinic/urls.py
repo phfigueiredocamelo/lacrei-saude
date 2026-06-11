@@ -7,6 +7,7 @@ from clinic import views
 
 router = DefaultRouter()
 router.register("professionals", views.ProfessionalViewSet, basename="professional")
+router.register("appointments", views.AppointmentViewSet, basename="appointment")
 
 urlpatterns = [
     path("health/", views.healthcheck, name="healthcheck"),
