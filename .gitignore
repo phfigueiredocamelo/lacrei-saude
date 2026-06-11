@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+db.sqlite3
+staticfiles/
+.DS_Store
+*.tfstate
+*.tfstate.*
+.terraform/

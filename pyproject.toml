@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "lacrei-saude"
+version = "0.1.0"
+description = "REST API for healthcare professionals, appointments, and Asaas split payments"
+authors = ["Lacrei Saude Challenge"]
+readme = "README.md"
+packages = [
+    { include = "config" },
+    { include = "clinic" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+django = "^5.0"
+djangorestframework = "^3.15"
+django-filter = "^24.3"
+django-cors-headers = "^4.4"
+drf-spectacular = "^0.27"
+psycopg = { extras = ["binary"], version = "^3.2" }
+dj-database-url = "^2.2"
+python-decouple = "^3.8"
+bleach = "^6.1"
+requests = "^2.32"
+gunicorn = "^23.0"
+whitenoise = "^6.7"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8"
+ruff = "^0.6"
+coverage = "^7.6"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.coverage.run]
+source = ["clinic", "config"]
+omit = ["*/migrations/*", "manage.py"]
