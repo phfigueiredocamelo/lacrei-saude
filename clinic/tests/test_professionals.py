@@ -1,4 +1,6 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from clinic.models import Professional
 from clinic.serializers import ProfessionalSerializer
@@ -61,3 +63,71 @@ class ProfessionalSerializerTests(TestCase):
         updated = serializer.save()
         self.assertEqual(updated.slug, "dra-ana-silva")
         self.assertEqual(updated.contact, "nova@example.com")
+
+
+@override_settings(API_KEY="test-key")
+class ProfessionalAPITests(APITestCase):
+    def setUp(self):
+        self.client.credentials(HTTP_X_API_KEY="test-key")
+
+    def test_create_list_retrieve_update_and_soft_delete_professional(self):
+        create_response = self.client.post(
+            "/api/professionals/",
+            {
+                "social_name": "Dra Clara",
+                "profession": "Clinica Geral",
+                "address": "Rua Um, 10",
+                "contact": "clara@example.com",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        professional_id = create_response.data["id"]
+        self.assertEqual(create_response.data["slug"], "dra-clara")
+
+        list_response = self.client.get("/api/professionals/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+
+        detail_response = self.client.get(f"/api/professionals/{professional_id}/")
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.data["social_name"], "Dra Clara")
+
+        update_response = self.client.patch(
+            f"/api/professionals/{professional_id}/",
+            {"contact": "nova@example.com"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.data["contact"], "nova@example.com")
+
+        delete_response = self.client.delete(f"/api/professionals/{professional_id}/")
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        deleted_professional = Professional.all_objects.get(pk=professional_id)
+        self.assertFalse(deleted_professional.is_active)
+        self.assertIsNotNone(deleted_professional.deleted_at)
+
+        hidden_response = self.client.get(f"/api/professionals/{professional_id}/")
+        self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_filter_by_slug(self):
+        Professional.objects.create(
+            social_name="Dra Alpha",
+            slug="dra-alpha",
+            profession="Psicologia",
+            address="Rua Um",
+            contact="alpha@example.com",
+        )
+        Professional.objects.create(
+            social_name="Dra Beta",
+            slug="dra-beta",
+            profession="Psiquiatria",
+            address="Rua Dois",
+            contact="beta@example.com",
+        )
+
+        response = self.client.get("/api/professionals/?slug=dra-beta")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["slug"], "dra-beta")
