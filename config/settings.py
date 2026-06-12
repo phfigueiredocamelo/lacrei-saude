@@ -115,6 +115,9 @@ CSRF_TRUSTED_ORIGINS = config(
 )
 
 REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "clinic.permissions.APIKeyAuthentication",
+    ],
     "DEFAULT_PERMISSION_CLASSES": [
         "clinic.permissions.HasAPIKey",
     ],
