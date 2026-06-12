@@ -14,3 +14,4 @@ staticfiles/
 *.tfstate
 *.tfstate.*
 .terraform/
+infra/terraform/*.tfvars

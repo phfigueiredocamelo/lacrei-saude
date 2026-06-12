@@ -29,8 +29,12 @@ resource "google_sql_database_instance" "postgres" {
   settings {
     tier = var.database_tier
 
+    disk_type       = "PD_HDD"
+    disk_size       = 10
+    disk_autoresize = false
+
     backup_configuration {
-      enabled = true
+      enabled = false
     }
   }
 }
