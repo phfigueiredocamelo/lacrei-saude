@@ -1,0 +1,57 @@
+name: Rollback Cloud Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Cloud Run environment to roll back
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      revision:
+        description: Cloud Run revision to receive 100% traffic
+        required: true
+        type: string
+
+env:
+  REGION: ${{ vars.GCP_REGION || 'southamerica-east1' }}
+
+jobs:
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+    if: inputs.environment != 'production' || github.ref == 'refs/heads/main'
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate target revision
+        run: |
+          SERVICE="lacrei-saude-${{ inputs.environment }}"
+          gcloud run revisions describe "${{ inputs.revision }}" \
+            --service "$SERVICE" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "$REGION" \
+            --platform managed
+
+      - name: Roll back Cloud Run traffic
+        run: |
+          gcloud run services update-traffic "lacrei-saude-${{ inputs.environment }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "$REGION" \
+            --platform managed \
+            --to-revisions "${{ inputs.revision }}=100" \
+            --quiet
