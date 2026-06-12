@@ -1,0 +1,18 @@
+project_id        = "your-gcp-project"
+region            = "southamerica-east1"
+environment       = "production"
+database_tier     = "db-custom-1-3840"
+database_password = "replace-with-secure-password"
+image             = "southamerica-east1-docker.pkg.dev/your-gcp-project/lacrei-saude/lacrei-saude-api:production"
+
+django_allowed_hosts  = "api.example.com"
+cors_allowed_origins  = "https://app.example.com"
+csrf_trusted_origins  = "https://app.example.com"
+asaas_base_url        = "https://api.asaas.com"
+
+secret_names = {
+  django_secret_key = "lacrei-production-django-secret-key"
+  api_key           = "lacrei-production-api-key"
+  database_url      = "lacrei-production-database-url"
+  asaas_api_key     = "lacrei-production-asaas-api-key"
+}

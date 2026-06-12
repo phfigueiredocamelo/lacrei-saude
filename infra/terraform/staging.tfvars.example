@@ -1,0 +1,18 @@
+project_id        = "your-gcp-project"
+region            = "southamerica-east1"
+environment       = "staging"
+database_tier     = "db-f1-micro"
+database_password = "replace-with-secure-password"
+image             = "southamerica-east1-docker.pkg.dev/your-gcp-project/lacrei-saude/lacrei-saude-api:staging"
+
+django_allowed_hosts  = "staging.example.com"
+cors_allowed_origins  = "https://staging.example.com"
+csrf_trusted_origins  = "https://staging.example.com"
+asaas_base_url        = "https://sandbox.asaas.com/api"
+
+secret_names = {
+  django_secret_key = "lacrei-staging-django-secret-key"
+  api_key           = "lacrei-staging-api-key"
+  database_url      = "lacrei-staging-database-url"
+  asaas_api_key     = "lacrei-staging-asaas-api-key"
+}
