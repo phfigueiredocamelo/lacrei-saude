@@ -1,0 +1,187 @@
+@baseUrl = http://127.0.0.1:8000
+@apiKey = local-api-key
+
+### Health check publico
+GET {{baseUrl}}/health/
+
+### Schema OpenAPI
+GET {{baseUrl}}/api/schema/
+X-API-Key: {{apiKey}}
+
+### Swagger UI
+GET {{baseUrl}}/api/docs/
+X-API-Key: {{apiKey}}
+
+### Auth: deve retornar 401 sem X-API-Key
+GET {{baseUrl}}/api/professionals/
+
+### Professionals: criar profissional
+# @name createProfessional
+POST {{baseUrl}}/api/professionals/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "social_name": "Dra Clara Nunes",
+  "profession": "Psicologia",
+  "address": "Rua das Flores, 123 - Sao Paulo, SP",
+  "contact": "clara@example.com"
+}
+
+### Professionals: listar
+GET {{baseUrl}}/api/professionals/
+X-API-Key: {{apiKey}}
+
+### Professionals: filtrar por slug
+GET {{baseUrl}}/api/professionals/?slug=dra-clara-nunes
+X-API-Key: {{apiKey}}
+
+### Professionals: filtrar por profissao
+GET {{baseUrl}}/api/professionals/?profession=Psicologia
+X-API-Key: {{apiKey}}
+
+### Professionals: detalhe usando ID criado acima
+GET {{baseUrl}}/api/professionals/{{createProfessional.response.body.$.id}}/
+X-API-Key: {{apiKey}}
+
+### Professionals: atualizar parcialmente
+PATCH {{baseUrl}}/api/professionals/{{createProfessional.response.body.$.id}}/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "contact": "clara.nunes@example.com"
+}
+
+### Appointments: criar consulta para o profissional criado
+# @name createAppointment
+POST {{baseUrl}}/api/appointments/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "date": "2027-06-12T14:00:00-03:00",
+  "professional": {{createProfessional.response.body.$.id}},
+  "customer_name": "Maria Oliveira",
+  "customer_document": "123.456.789-00",
+  "price": "300.00",
+  "asaas_split": [
+    {
+      "walletId": "wallet-fixed",
+      "fixedValue": "50.00"
+    },
+    {
+      "walletId": "wallet-percent",
+      "percentualValue": "20"
+    }
+  ]
+}
+
+### Appointments: listar
+GET {{baseUrl}}/api/appointments/
+X-API-Key: {{apiKey}}
+
+### Appointments: filtrar por profissional
+GET {{baseUrl}}/api/appointments/?professional={{createProfessional.response.body.$.id}}
+X-API-Key: {{apiKey}}
+
+### Appointments: filtrar por status de pagamento
+GET {{baseUrl}}/api/appointments/?payment_status=PENDING
+X-API-Key: {{apiKey}}
+
+### Appointments: detalhe
+GET {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/
+X-API-Key: {{apiKey}}
+
+### Appointments: listar consultas de um profissional
+GET {{baseUrl}}/api/professionals/{{createProfessional.response.body.$.id}}/appointments/
+X-API-Key: {{apiKey}}
+
+### Appointments: atualizar parcialmente
+PATCH {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "customer_name": "Maria Oliveira Atualizada",
+  "price": "350.00"
+}
+
+### Payment: consultar estado do pagamento
+GET {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/payment/
+X-API-Key: {{apiKey}}
+
+### Payment: criar pagamento no Asaas
+# Requer que a consulta tenha asaas_customer_id no banco.
+# Caso contrario, a API deve retornar 400 com erro em asaas_customer_id.
+POST {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/payment/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{}
+
+### Webhook Asaas: evento processado quando existe asaas_payment_id correspondente
+# Ajuste payment.id para um asaas_payment_id existente no banco.
+POST {{baseUrl}}/api/asaas/webhook/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "event": "PAYMENT_RECEIVED",
+  "payment": {
+    "id": "pay_123",
+    "externalReference": "appointment:{{createAppointment.response.body.$.id}}"
+  }
+}
+
+### Webhook Asaas: evento ignorado por referencia externa invalida
+POST {{baseUrl}}/api/asaas/webhook/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "event": "PAYMENT_RECEIVED",
+  "payment": {
+    "id": "pay_123",
+    "externalReference": "customer:123"
+  }
+}
+
+### Validation: profissional invalido deve retornar 400
+POST {{baseUrl}}/api/professionals/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "social_name": "   ",
+  "profession": "Psicologia",
+  "address": "Rua Um",
+  "contact": "ana@example.com"
+}
+
+### Validation: consulta com data passada deve retornar 400
+POST {{baseUrl}}/api/appointments/
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "date": "2020-01-01T10:00:00-03:00",
+  "professional": {{createProfessional.response.body.$.id}},
+  "customer_name": "Joao Souza",
+  "customer_document": "987.654.321-00",
+  "price": "200.00",
+  "asaas_split": [
+    {
+      "walletId": "wallet-percent",
+      "percentualValue": "20"
+    }
+  ]
+}
+
+### Appointments: soft delete
+DELETE {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/
+X-API-Key: {{apiKey}}
+
+### Professionals: soft delete
+DELETE {{baseUrl}}/api/professionals/{{createProfessional.response.body.$.id}}/
+X-API-Key: {{apiKey}}
