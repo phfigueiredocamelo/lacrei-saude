@@ -1,6 +1,7 @@
 """Public API views."""
 
-from rest_framework import viewsets
+from django.utils import timezone
+from rest_framework import status, viewsets
 from rest_framework.decorators import (
     action,
     api_view,
@@ -10,6 +11,11 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from clinic.asaas import (
+    AsaasError,
+    create_payment_for_appointment,
+    map_asaas_event_to_status,
+)
 from clinic.models import Appointment, Professional
 from clinic.serializers import AppointmentSerializer, ProfessionalSerializer
 
@@ -19,6 +25,48 @@ from clinic.serializers import AppointmentSerializer, ProfessionalSerializer
 @permission_classes([AllowAny])
 def healthcheck(request):
     return Response({"status": "ok"})
+
+
+def payment_info(appointment):
+    return {
+        "payment_status": appointment.payment_status,
+        "asaas_payment_id": appointment.asaas_payment_id,
+        "asaas_customer_id": appointment.asaas_customer_id,
+        "external_reference": appointment.external_reference,
+    }
+
+
+@api_view(["POST"])
+def asaas_webhook(request):
+    event = request.data.get("event")
+    payment = request.data.get("payment") or {}
+    payment_id = payment.get("id") if isinstance(payment, dict) else None
+    external_reference = (
+        payment.get("externalReference") if isinstance(payment, dict) else None
+    )
+    status_value = map_asaas_event_to_status(event)
+
+    if not event or not payment_id or status_value is None:
+        return Response({"status": "ignored"})
+
+    appointments = Appointment.objects.filter(asaas_payment_id=payment_id)
+    if external_reference:
+        if not external_reference.startswith("appointment:"):
+            return Response({"status": "ignored"})
+        try:
+            appointment_id = int(external_reference.removeprefix("appointment:"))
+        except (AttributeError, ValueError):
+            return Response({"status": "ignored"})
+        appointments = appointments.filter(id=appointment_id)
+
+    updated = appointments.update(
+        payment_status=status_value,
+        updated_at=timezone.now(),
+    )
+    if not updated:
+        return Response({"status": "ignored"})
+
+    return Response({"status": "processed", "updated": updated})
 
 
 class ProfessionalViewSet(viewsets.ModelViewSet):
@@ -43,3 +91,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.select_related("professional").all()
     serializer_class = AppointmentSerializer
     filterset_fields = ["professional", "payment_status"]
+
+    @action(detail=True, methods=["get", "post"], url_path="payment")
+    def payment(self, request, pk=None):
+        appointment = self.get_object()
+
+        if request.method == "GET":
+            return Response(payment_info(appointment))
+
+        try:
+            appointment = create_payment_for_appointment(appointment)
+        except ValueError as exc:
+            return Response(
+                {"asaas_customer_id": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except AsaasError:
+            return Response(
+                {"detail": "Failed to create payment."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(payment_info(appointment))
