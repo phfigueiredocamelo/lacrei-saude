@@ -105,4 +105,5 @@ class Appointment(SoftDeleteModel):
         return Decimal(self.price)
 
     def __str__(self) -> str:
-        return f"{self.customer_name} with {self.professional} on {self.date:%Y-%m-%d %H:%M}"
+        appointment_date = self.date.strftime("%Y-%m-%d %H:%M")
+        return f"{self.customer_name} with {self.professional} on {appointment_date}"

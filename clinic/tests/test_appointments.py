@@ -41,7 +41,9 @@ class AppointmentSerializerTests(TestCase):
 
         self.assertEqual(serializer.validated_data["professional"], self.professional)
         self.assertEqual(serializer.validated_data["customer_name"], "Maria Oliveira")
-        self.assertEqual(serializer.validated_data["customer_document"], "123.456.789-00")
+        self.assertEqual(
+            serializer.validated_data["customer_document"], "123.456.789-00"
+        )
         self.assertEqual(serializer.validated_data["price"], Decimal("150.00"))
 
     def test_sanitizes_split_wallet_id(self):

@@ -133,7 +133,13 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "professional",
             getattr(self.instance, "professional", None),
         )
-        if professional is not None and not professional.is_active:
+        professional_is_active = (
+            professional is not None
+            and Professional.all_objects.filter(
+                pk=professional.pk, is_active=True
+            ).exists()
+        )
+        if professional is not None and not professional_is_active:
             errors["professional"] = "Professional must be active."
 
         split_errors = self._validate_asaas_split(attrs.get("asaas_split", []))
