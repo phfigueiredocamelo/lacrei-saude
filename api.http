@@ -1,5 +1,5 @@
 @baseUrl = https://lacrei-saude-staging-395627369200.southamerica-east1.run.app/
-@apiKey = replace-with-staging-api-key
+@apiKey = 123
 
 ### Health check publico
 GET {{baseUrl}}/health/
@@ -22,10 +22,10 @@ Content-Type: application/json
 X-API-Key: {{apiKey}}
 
 {
-  "social_name": "Dra Clara Nunes",
+  "social_name": "Dra Eline Silva",
   "profession": "Psicologia",
   "address": "Rua das Flores, 123 - Sao Paulo, SP",
-  "contact": "clara@example.com"
+  "contact": "eline@example.com"
 }
 
 ### Professionals: listar
@@ -33,7 +33,7 @@ GET {{baseUrl}}/api/professionals/
 X-API-Key: {{apiKey}}
 
 ### Professionals: filtrar por slug
-GET {{baseUrl}}/api/professionals/?slug=dra-clara-nunes
+GET {{baseUrl}}/api/professionals/?slug=dra-eline-silva
 X-API-Key: {{apiKey}}
 
 ### Professionals: filtrar por profissao
@@ -50,10 +50,11 @@ Content-Type: application/json
 X-API-Key: {{apiKey}}
 
 {
-  "contact": "clara.nunes@example.com"
+  "contact": "eline.silva@example.com"
 }
 
 ### Appointments: criar consulta para o profissional criado
+# Cria/atualiza o paciente e sincroniza o cliente no Asaas.
 # @name createAppointment
 POST {{baseUrl}}/api/appointments/
 Content-Type: application/json
@@ -62,17 +63,13 @@ X-API-Key: {{apiKey}}
 {
   "date": "2027-06-12T14:00:00-03:00",
   "professional": {{createProfessional.response.body.$.id}},
-  "customer_name": "Maria Oliveira",
-  "customer_document": "123.456.789-00",
+  "customer_name": "Pedro Algusto",
+  "customer_document": "16071537002",
   "price": "300.00",
   "asaas_split": [
     {
-      "walletId": "wallet-fixed",
-      "fixedValue": "50.00"
-    },
-    {
-      "walletId": "wallet-percent",
-      "percentualValue": "20"
+      "walletId": "da80b358-2a5e-4969-8fa3-91ec4259a17d",
+      "fixedValue": "300"
     }
   ]
 }
@@ -112,8 +109,8 @@ GET {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/paymen
 X-API-Key: {{apiKey}}
 
 ### Payment: criar pagamento no Asaas
-# Requer que a consulta tenha asaas_customer_id no banco.
-# Caso contrario, a API deve retornar 400 com erro em asaas_customer_id.
+# Cria apenas a cobranca. O cliente Asaas ja foi criado na consulta.
+# @name createPayment
 POST {{baseUrl}}/api/appointments/{{createAppointment.response.body.$.id}}/payment/
 Content-Type: application/json
 X-API-Key: {{apiKey}}

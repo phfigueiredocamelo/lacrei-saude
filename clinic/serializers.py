@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
+from clinic.asaas import AsaasClient, AsaasError
 from clinic.models import Appointment, Patient, Professional
 
 
@@ -155,7 +156,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         patient = self._get_or_create_patient(validated_data)
+        self._sync_asaas_customer(patient, validated_data)
         validated_data["patient"] = patient
+        validated_data["asaas_customer_id"] = patient.asaas_id
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
@@ -171,6 +174,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
                 ),
             }
             validated_data["patient"] = self._get_or_create_patient(patient_data)
+            self._sync_asaas_customer(validated_data["patient"], patient_data)
+            validated_data["asaas_customer_id"] = validated_data["patient"].asaas_id
         return super().update(instance, validated_data)
 
     def _get_or_create_patient(self, data):
@@ -184,6 +189,32 @@ class AppointmentSerializer(serializers.ModelSerializer):
             patient.name = name
             patient.save(update_fields=["name", "updated_at"])
         return patient
+
+    def _sync_asaas_customer(self, patient, data):
+        payload = {
+            "name": data.get("customer_name"),
+            "cpfCnpj": data.get("customer_document"),
+        }
+        client = AsaasClient()
+        try:
+            if patient.asaas_id:
+                client.update_customer(patient.asaas_id, payload)
+                return
+
+            result = client.create_customer(payload)
+        except AsaasError as exc:
+            raise serializers.ValidationError(
+                {"asaas_customer_id": "Failed to sync Asaas customer."}
+            ) from exc
+
+        customer_id = result.get("id")
+        if not customer_id:
+            raise serializers.ValidationError(
+                {"asaas_customer_id": "Asaas response did not include customer id."}
+            )
+
+        patient.asaas_id = customer_id
+        patient.save(update_fields=["asaas_id", "updated_at"])
 
     def _validate_asaas_split(self, split):
         if split in (None, ""):

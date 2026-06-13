@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -89,7 +90,12 @@ class AppointmentSerializerTests(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("professional", serializer.errors)
 
-    def test_partial_update_rejects_existing_inactive_professional(self):
+    @patch("clinic.serializers.AsaasClient.create_customer")
+    def test_partial_update_rejects_existing_inactive_professional(
+        self,
+        create_customer,
+    ):
+        create_customer.return_value = {"id": "cus_123"}
         appointment = AppointmentSerializer(data=self.valid_data())
         self.assertTrue(appointment.is_valid(), appointment.errors)
         instance = appointment.save()
@@ -168,7 +174,14 @@ class AppointmentAPITests(APITestCase):
         payload.update(overrides)
         return payload
 
-    def test_create_list_retrieve_update_and_soft_delete_appointment(self):
+    @patch("clinic.serializers.AsaasClient.update_customer")
+    @patch("clinic.serializers.AsaasClient.create_customer")
+    def test_create_list_retrieve_update_and_soft_delete_appointment(
+        self,
+        create_customer,
+        update_customer,
+    ):
+        create_customer.return_value = {"id": "cus_123"}
         create_response = self.client.post(
             "/api/appointments/",
             self.appointment_payload(),
@@ -179,6 +192,7 @@ class AppointmentAPITests(APITestCase):
         self.assertEqual(create_response.data["customer_name"], "Maria Oliveira")
         self.assertEqual(create_response.data["customer_document"], "123.456.789-00")
         self.assertEqual(create_response.data["price"], "150.00")
+        self.assertEqual(create_response.data["asaas_customer_id"], "cus_123")
         self.assertEqual(
             create_response.data["asaas_split"][0]["walletId"],
             "wallet-fixed",
@@ -202,6 +216,13 @@ class AppointmentAPITests(APITestCase):
         self.assertEqual(update_response.status_code, status.HTTP_200_OK)
         self.assertEqual(update_response.data["customer_name"], "Maria Atualizada")
         self.assertEqual(update_response.data["price"], "175.00")
+        update_customer.assert_called_once_with(
+            "cus_123",
+            {
+                "name": "Maria Atualizada",
+                "cpfCnpj": "123.456.789-00",
+            },
+        )
 
         delete_response = self.client.delete(f"/api/appointments/{appointment_id}/")
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
