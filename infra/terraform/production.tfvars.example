@@ -4,6 +4,7 @@ environment       = "production"
 database_tier     = "db-custom-1-3840"
 database_password = "replace-with-secure-password"
 image             = "southamerica-east1-docker.pkg.dev/your-gcp-project/lacrei-saude/lacrei-saude-api:production"
+cloud_run_memory  = "1Gi"
 
 django_allowed_hosts  = "api.example.com"
 cors_allowed_origins  = "https://app.example.com"

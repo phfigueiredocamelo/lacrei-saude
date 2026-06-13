@@ -1,5 +1,5 @@
-@baseUrl = http://127.0.0.1:8000
-@apiKey = local-api-key
+@baseUrl = https://lacrei-saude-staging-395627369200.southamerica-east1.run.app/
+@apiKey = replace-with-staging-api-key
 
 ### Health check publico
 GET {{baseUrl}}/health/

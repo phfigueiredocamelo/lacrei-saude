@@ -36,6 +36,12 @@ variable "image" {
   type        = string
 }
 
+variable "cloud_run_memory" {
+  description = "Memory limit for the Cloud Run API container."
+  type        = string
+  default     = "1Gi"
+}
+
 variable "django_allowed_hosts" {
   description = "Comma-separated Django allowed hosts."
   type        = string

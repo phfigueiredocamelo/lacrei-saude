@@ -4,6 +4,7 @@ environment       = "staging"
 database_tier     = "db-f1-micro"
 database_password = "replace-with-secure-password"
 image             = "southamerica-east1-docker.pkg.dev/your-gcp-project/lacrei-saude/lacrei-saude-api:staging"
+cloud_run_memory  = "1Gi"
 
 django_allowed_hosts  = "staging.example.com"
 cors_allowed_origins  = "https://staging.example.com"
