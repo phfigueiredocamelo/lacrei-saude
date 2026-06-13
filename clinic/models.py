@@ -67,6 +67,18 @@ class Professional(SoftDeleteModel):
         return self.social_name
 
 
+class Patient(SoftDeleteModel):
+    name = models.CharField(max_length=150)
+    document = models.CharField(max_length=40, unique=True)
+    asaas_id = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Appointment(SoftDeleteModel):
     class PaymentStatus(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -78,6 +90,13 @@ class Appointment(SoftDeleteModel):
     date = models.DateTimeField()
     professional = models.ForeignKey(
         Professional,
+        on_delete=models.PROTECT,
+        related_name="appointments",
+    )
+    patient = models.ForeignKey(
+        Patient,
+        blank=True,
+        null=True,
         on_delete=models.PROTECT,
         related_name="appointments",
     )

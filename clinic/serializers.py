@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from clinic.models import Appointment, Professional
+from clinic.models import Appointment, Patient, Professional
 
 
 def clean_text(value):
@@ -87,6 +87,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "id",
             "date",
             "professional",
+            "patient",
             "customer_name",
             "customer_document",
             "price",
@@ -101,6 +102,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
+            "patient",
             "payment_status",
             "asaas_payment_id",
             "asaas_customer_id",
@@ -150,6 +152,38 @@ class AppointmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
 
         return attrs
+
+    def create(self, validated_data):
+        patient = self._get_or_create_patient(validated_data)
+        validated_data["patient"] = patient
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "customer_document" in validated_data or "customer_name" in validated_data:
+            patient_data = {
+                "customer_document": validated_data.get(
+                    "customer_document",
+                    instance.customer_document,
+                ),
+                "customer_name": validated_data.get(
+                    "customer_name",
+                    instance.customer_name,
+                ),
+            }
+            validated_data["patient"] = self._get_or_create_patient(patient_data)
+        return super().update(instance, validated_data)
+
+    def _get_or_create_patient(self, data):
+        document = data.get("customer_document")
+        name = data.get("customer_name")
+        patient, _ = Patient.objects.get_or_create(
+            document=document,
+            defaults={"name": name},
+        )
+        if patient.name != name:
+            patient.name = name
+            patient.save(update_fields=["name", "updated_at"])
+        return patient
 
     def _validate_asaas_split(self, split):
         if split in (None, ""):

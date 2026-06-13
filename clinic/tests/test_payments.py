@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from clinic.asaas import AsaasClient, AsaasError, create_payment_for_appointment
-from clinic.models import Appointment, Professional
+from clinic.models import Appointment, Patient, Professional
 
 
 @override_settings(API_KEY="test-key", ASAAS_DEFAULT_BILLING_TYPE="BOLETO")
@@ -22,9 +22,15 @@ class PaymentAPITests(APITestCase):
             address="Rua das Flores, 123",
             contact="ana@example.com",
         )
+        self.patient = Patient.objects.create(
+            name="Maria Oliveira",
+            document="123.456.789-00",
+            asaas_id="cus_123",
+        )
         self.appointment = Appointment.objects.create(
             date=timezone.now() + timezone.timedelta(days=1),
             professional=self.professional,
+            patient=self.patient,
             customer_name="Maria Oliveira",
             customer_document="123.456.789-00",
             price=Decimal("300.00"),
@@ -59,9 +65,68 @@ class PaymentAPITests(APITestCase):
             [{"walletId": "wallet_1", "percentualValue": 25}],
         )
 
-    def test_create_payment_requires_asaas_customer_id(self):
+    @patch("clinic.asaas.AsaasClient.create_payment")
+    @patch("clinic.asaas.AsaasClient.create_customer")
+    def test_create_payment_creates_asaas_customer_for_patient(
+        self,
+        create_customer,
+        create_payment,
+    ):
         self.appointment.asaas_customer_id = ""
         self.appointment.save(update_fields=["asaas_customer_id"])
+        self.appointment.patient.asaas_id = ""
+        self.appointment.patient.save(update_fields=["asaas_id"])
+        create_customer.return_value = {"id": "cus_new"}
+        create_payment.return_value = {"id": "pay_123", "status": "PENDING"}
+
+        response = self.client.post(
+            f"/api/appointments/{self.appointment.id}/payment/",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        create_customer.assert_called_once_with(
+            {
+                "name": "Maria Oliveira",
+                "cpfCnpj": "123.456.789-00",
+            }
+        )
+        payload = create_payment.call_args.args[0]
+        self.assertEqual(payload["customer"], "cus_new")
+        self.appointment.refresh_from_db()
+        self.appointment.patient.refresh_from_db()
+        self.assertEqual(self.appointment.patient.asaas_id, "cus_new")
+        self.assertEqual(self.appointment.asaas_customer_id, "cus_new")
+
+    @patch("clinic.asaas.AsaasClient.create_payment")
+    @patch("clinic.asaas.AsaasClient.create_customer")
+    def test_create_payment_reuses_existing_patient_asaas_id(
+        self,
+        create_customer,
+        create_payment,
+    ):
+        self.appointment.asaas_customer_id = ""
+        self.appointment.save(update_fields=["asaas_customer_id"])
+        self.appointment.patient.asaas_id = "cus_existing"
+        self.appointment.patient.save(update_fields=["asaas_id"])
+        create_payment.return_value = {"id": "pay_123", "status": "PENDING"}
+
+        response = self.client.post(
+            f"/api/appointments/{self.appointment.id}/payment/",
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        create_customer.assert_not_called()
+        payload = create_payment.call_args.args[0]
+        self.assertEqual(payload["customer"], "cus_existing")
+        self.appointment.refresh_from_db()
+        self.assertEqual(self.appointment.asaas_customer_id, "cus_existing")
+
+    def test_create_payment_requires_asaas_customer_id(self):
+        self.appointment.asaas_customer_id = ""
+        self.appointment.patient = None
+        self.appointment.save(update_fields=["asaas_customer_id", "patient"])
 
         response = self.client.post(
             f"/api/appointments/{self.appointment.id}/payment/",
@@ -70,6 +135,53 @@ class PaymentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("asaas_customer_id", response.data)
+
+    def test_create_appointment_creates_patient_by_document(self):
+        response = self.client.post(
+            "/api/appointments/",
+            {
+                "date": (timezone.now() + timezone.timedelta(days=2)).isoformat(),
+                "professional": self.professional.id,
+                "customer_name": "Joao Pessoa",
+                "customer_document": "987.654.321-00",
+                "price": "250.00",
+                "asaas_split": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        patient = Patient.objects.get(document="987.654.321-00")
+        self.assertEqual(patient.name, "Joao Pessoa")
+        appointment = Appointment.objects.get(id=response.data["id"])
+        self.assertEqual(appointment.patient, patient)
+
+    def test_create_appointment_reuses_patient_by_document(self):
+        patient = Patient.objects.create(
+            name="Nome Antigo",
+            document="987.654.321-00",
+            asaas_id="cus_existing",
+        )
+
+        response = self.client.post(
+            "/api/appointments/",
+            {
+                "date": (timezone.now() + timezone.timedelta(days=2)).isoformat(),
+                "professional": self.professional.id,
+                "customer_name": "Nome Novo",
+                "customer_document": "987.654.321-00",
+                "price": "250.00",
+                "asaas_split": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        patient.refresh_from_db()
+        self.assertEqual(patient.name, "Nome Novo")
+        self.assertEqual(patient.asaas_id, "cus_existing")
+        appointment = Appointment.objects.get(id=response.data["id"])
+        self.assertEqual(appointment.patient, patient)
 
     def test_get_payment_returns_payment_info(self):
         self.appointment.asaas_payment_id = "pay_123"
@@ -177,6 +289,29 @@ class PaymentAPITests(APITestCase):
         post.assert_called_once_with(
             "https://sandbox.asaas.com/api/v3/lean/payments",
             json={"value": 300.0},
+            headers={
+                "accept": "application/json",
+                "content-type": "application/json",
+                "access_token": "secret",
+            },
+            timeout=15,
+        )
+
+    @patch("clinic.asaas.requests.post")
+    def test_asaas_client_posts_expected_customer_request(self, post):
+        response = Mock(status_code=200)
+        response.json.return_value = {"id": "cus_123"}
+        post.return_value = response
+
+        result = AsaasClient(
+            base_url="https://sandbox.asaas.com/api",
+            api_key="secret",
+        ).create_customer({"name": "Maria Oliveira", "cpfCnpj": "12345678900"})
+
+        self.assertEqual(result, {"id": "cus_123"})
+        post.assert_called_once_with(
+            "https://sandbox.asaas.com/api/v3/customers",
+            json={"name": "Maria Oliveira", "cpfCnpj": "12345678900"},
             headers={
                 "accept": "application/json",
                 "content-type": "application/json",

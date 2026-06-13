@@ -25,9 +25,15 @@ class AsaasClient:
         self.timeout = timeout
 
     def create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/v3/lean/payments", payload)
+
+    def create_customer(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/v3/customers", payload)
+
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             response = requests.post(
-                f"{self.base_url}/v3/lean/payments",
+                f"{self.base_url}{path}",
                 json=payload,
                 headers={
                     "accept": "application/json",
@@ -58,14 +64,46 @@ def build_payment_payload(appointment: Appointment) -> dict[str, Any]:
     }
 
 
+def build_customer_payload(appointment: Appointment) -> dict[str, Any]:
+    return {
+        "name": appointment.customer_name,
+        "cpfCnpj": appointment.customer_document,
+    }
+
+
+def ensure_asaas_customer(
+    appointment: Appointment,
+    client: AsaasClient,
+) -> Appointment:
+    if appointment.asaas_customer_id:
+        return appointment
+
+    if appointment.patient and appointment.patient.asaas_id:
+        appointment.asaas_customer_id = appointment.patient.asaas_id
+        appointment.save(update_fields=["asaas_customer_id", "updated_at"])
+        return appointment
+
+    if not appointment.patient:
+        raise ValueError("asaas_customer_id is required to create a payment.")
+
+    result = client.create_customer(build_customer_payload(appointment))
+    customer_id = result.get("id")
+    if not customer_id:
+        raise AsaasError("Asaas response did not include customer id.")
+
+    appointment.patient.asaas_id = customer_id
+    appointment.patient.save(update_fields=["asaas_id", "updated_at"])
+    appointment.asaas_customer_id = customer_id
+    appointment.save(update_fields=["asaas_customer_id", "updated_at"])
+    return appointment
+
+
 def create_payment_for_appointment(
     appointment: Appointment,
     client: AsaasClient | None = None,
 ) -> Appointment:
-    if not appointment.asaas_customer_id:
-        raise ValueError("asaas_customer_id is required to create a payment.")
-
     payment_client = client or AsaasClient()
+    appointment = ensure_asaas_customer(appointment, payment_client)
     result = payment_client.create_payment(build_payment_payload(appointment))
     payment_id = result.get("id")
     if not payment_id:
