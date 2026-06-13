@@ -1,5 +1,7 @@
 """Public API views."""
 
+import logging
+
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import (
@@ -18,6 +20,8 @@ from clinic.asaas import (
 )
 from clinic.models import Appointment, Professional
 from clinic.serializers import AppointmentSerializer, ProfessionalSerializer
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -73,6 +77,23 @@ class ProfessionalViewSet(viewsets.ModelViewSet):
     queryset = Professional.objects.all()
     serializer_class = ProfessionalSerializer
     filterset_fields = ["slug", "profession"]
+
+    def perform_create(self, serializer):
+        try:
+            professional = serializer.save()
+        except Exception:
+            logger.exception(
+                "professional_create_failed payload_keys=%s slug=%s",
+                sorted(self.request.data.keys()),
+                serializer.validated_data.get("slug"),
+            )
+            raise
+
+        logger.info(
+            "professional_created professional_id=%s slug=%s",
+            professional.id,
+            professional.slug,
+        )
 
     @action(detail=True, methods=["get"], url_path="appointments")
     def appointments(self, request, pk=None):

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -131,3 +133,33 @@ class ProfessionalAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["slug"], "dra-beta")
+
+    def test_unexpected_create_error_is_logged_with_context(self):
+        self.client.raise_request_exception = False
+
+        with (
+            self.assertLogs("clinic.views", level="ERROR") as logs,
+            patch.object(
+                ProfessionalSerializer,
+                "save",
+                side_effect=RuntimeError("database exploded"),
+            ),
+        ):
+            response = self.client.post(
+                "/api/professionals/",
+                {
+                    "social_name": "Dra Clara",
+                    "profession": "Clinica Geral",
+                    "address": "Rua Um, 10",
+                    "contact": "clara@example.com",
+                },
+                format="json",
+            )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+        self.assertIn("professional_create_failed", logs.output[0])
+        self.assertIn("payload_keys=", logs.output[0])
+        self.assertIn("slug=dra-clara", logs.output[0])
