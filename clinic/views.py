@@ -81,9 +81,12 @@ class ProfessionalViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         try:
             professional = serializer.save()
-        except Exception:
-            logger.exception(
-                "professional_create_failed payload_keys=%s slug=%s",
+        except Exception as exc:
+            logger.error(
+                "professional_create_failed error_type=%s error_message=%s "
+                "payload_keys=%s slug=%s",
+                exc.__class__.__name__,
+                str(exc),
                 sorted(self.request.data.keys()),
                 serializer.validated_data.get("slug"),
             )

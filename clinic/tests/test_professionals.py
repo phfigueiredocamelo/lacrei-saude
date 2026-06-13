@@ -161,5 +161,7 @@ class ProfessionalAPITests(APITestCase):
             status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
         self.assertIn("professional_create_failed", logs.output[0])
+        self.assertIn("error_type=RuntimeError", logs.output[0])
+        self.assertIn("error_message=database exploded", logs.output[0])
         self.assertIn("payload_keys=", logs.output[0])
         self.assertIn("slug=dra-clara", logs.output[0])
